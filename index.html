@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Film</title>
+  <!-- Load Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Load Inter & JetBrains Mono for authentic Swiss International Typographic Style -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Helvetica Neue', 'Helvetica', 'Arial', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            paper: '#F8F7F4',
+            ink: '#111111',
+            muted: '#666666',
+            swissRed: '#D92B2B',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #F8F7F4;
+      color: #111111;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Hairline Swiss Grid Borders */
+    .swiss-border {
+      border-color: #111111;
+    }
+
+    /* Subtle poster fade-in transition */
+    #moviePoster {
+      transition: opacity 0.25s ease;
+    }
+
+    /* Hide broken image icon cleanly */
+    img[src=""] {
+      opacity: 0;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-3 sm:p-6 md:p-10">
+
+  <!-- SINGLE CENTERED SWISS EDITORIAL SHEET (NO APP TITLE, NO HEADER, JUST BUTTON + MOVIE) -->
+  <main class="w-full max-w-[920px] border border-ink bg-paper">
+
+    <!-- TOP ACTION BAR: ONLY THE 'SUGGEST A MOVIE' BUTTON & SUBTLE CSV LOADER -->
+    <div class="grid grid-cols-12 border-b border-ink">
+      <button id="suggestBtn" type="button"
+        class="col-span-10 sm:col-span-11 bg-ink text-paper hover:bg-paper hover:text-ink active:bg-ink/90 transition-colors duration-150 px-5 sm:px-7 py-4 sm:py-5 flex items-center justify-between text-left group cursor-pointer focus:outline-none">
+        <span class="flex items-center space-x-3">
+          <span id="statusDot" class="w-2 h-2 rounded-full bg-paper group-hover:bg-ink transition-colors"></span>
+          <span class="text-xs sm:text-sm font-semibold uppercase tracking-[0.16em]">Suggest a Movie</span>
+        </span>
+        <span class="font-mono text-[11px] uppercase tracking-widest opacity-70 group-hover:opacity-100">
+          [Space] / &rarr;
+        </span>
+      </button>
+
+      <!-- Discreet CSV File Loader for local 3,699-row NYT file if opened without a server -->
+      <label title="Load nyt_movies_loved_since_2000_full.csv"
+        class="col-span-2 sm:col-span-1 border-l border-ink bg-paper hover:bg-ink hover:text-paper transition-colors flex flex-col items-center justify-center cursor-pointer select-none p-2 text-center">
+        <span id="csvCountLabel" class="font-mono text-[10px] leading-tight font-medium">CSV</span>
+        <input id="csvFileInput" type="file" accept=".csv,.txt" class="hidden">
+      </label>
+    </div>
+
+    <!-- INLINE ERROR NOTICE (HIDDEN UNLESS NEEDED, NO BROWSER ALERTS) -->
+    <div id="errorBanner" class="hidden border-b border-ink bg-paper px-5 py-3 text-xs font-mono text-swissRed flex items-center justify-between">
+      <span id="errorText"></span>
+      <button id="dismissErrorBtn" type="button" class="underline uppercase ml-4">Dismiss</button>
+    </div>
+
+    <!-- MOVIE CARD BODY -->
+    <article class="grid grid-cols-1 md:grid-cols-12">
+
+      <!-- LEFT COLUMN: MOVIE POSTER (5 COLUMNS) -->
+      <div class="md:col-span-5 border-b md:border-b-0 md:border-r border-ink bg-[#EFECE6] relative flex items-center justify-center aspect-[2/3] w-full overflow-hidden">
+        <!-- Minimalist Typographic Fallback when Poster is missing or loading -->
+        <div id="posterFallback" class="absolute inset-0 flex flex-col justify-between p-6 text-muted select-none pointer-events-none">
+          <div class="flex justify-between font-mono text-[10px] uppercase tracking-widest">
+            <span id="fallbackImdbId">TT0000000</span>
+            <span id="fallbackYear">----</span>
+          </div>
+          <div class="my-auto">
+            <p id="fallbackTitle" class="text-lg font-semibold text-ink tracking-tight uppercase leading-snug"></p>
+          </div>
+          <div class="font-mono text-[10px] uppercase tracking-widest">
+            35MM ARCHIVE FRAME
+          </div>
+        </div>
+
+        <!-- Live OMDb Poster Image -->
+        <img id="moviePoster" src="" alt="Film Poster"
+          class="relative z-10 w-full h-full object-cover opacity-0"
+          onload="if(this.src && !this.src.endsWith(window.location.href)) { this.classList.remove('opacity-0'); }"
+          onerror="this.classList.add('opacity-0');">
+      </div>
+
+      <!-- RIGHT COLUMN: SWISS TYPOGRAPHIC SPECIFICATION & PLOT (7 COLUMNS) -->
+      <div class="md:col-span-7 flex flex-col justify-between">
+
+        <!-- TOP METADATA ROW -->
+        <div class="border-b border-ink px-5 sm:px-7 py-3.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[11px] uppercase tracking-wider text-muted">
+          <div class="flex items-center space-x-2 sm:space-x-3">
+            <span id="movieIndex" class="text-ink font-medium">#----</span>
+            <span>/</span>
+            <span id="movieYear" class="text-ink font-medium">----</span>
+            <span>/</span>
+            <span id="movieRuntime">-- MIN</span>
+            <span id="movieRatedWrapper" class="hidden sm:inline">
+              <span>/</span>
+              <span id="movieRated" class="ml-2">NR</span>
+            </span>
+          </div>
+
+          <!-- Curated NYT / Awards Badges from CSV -->
+          <div id="accoladeBadges" class="flex items-center flex-wrap gap-1.5"></div>
+        </div>
+
+        <!-- MAIN FILM TITLE & BRIEF IMDB DESCRIPTION -->
+        <div class="px-5 sm:px-7 py-6 sm:py-8 flex-grow flex flex-col justify-center">
+          <h1 id="movieTitle"
+            class="text-2xl sm:text-4xl font-bold tracking-[-0.03em] leading-[1.06] text-ink mb-5">
+            Loading Selection...
+          </h1>
+
+          <p id="moviePlot"
+            class="text-sm sm:text-[15px] leading-[1.68] text-ink/90 font-normal max-w-[58ch]">
+            Retrieving film details from IMDb...
+          </p>
+        </div>
+
+        <!-- STRUCTURED SWISS SPECIFICATION TABLE -->
+        <div class="border-t border-ink divide-y divide-ink text-xs">
+
+          <!-- Director -->
+          <div class="grid grid-cols-12 px-5 sm:px-7 py-2.5 items-baseline">
+            <span class="col-span-4 sm:col-span-3 font-mono text-[10px] uppercase tracking-widest text-muted">Director</span>
+            <span id="movieDirector" class="col-span-8 sm:col-span-9 font-medium text-ink truncate">-</span>
+          </div>
+
+          <!-- Cast -->
+          <div class="grid grid-cols-12 px-5 sm:px-7 py-2.5 items-baseline">
+            <span class="col-span-4 sm:col-span-3 font-mono text-[10px] uppercase tracking-widest text-muted">Cast</span>
+            <span id="movieActors" class="col-span-8 sm:col-span-9 font-normal text-ink truncate">-</span>
+          </div>
+
+          <!-- Genre -->
+          <div class="grid grid-cols-12 px-5 sm:px-7 py-2.5 items-baseline">
+            <span class="col-span-4 sm:col-span-3 font-mono text-[10px] uppercase tracking-widest text-muted">Genre</span>
+            <span id="movieGenre" class="col-span-8 sm:col-span-9 font-normal text-ink truncate">-</span>
+          </div>
+
+          <!-- IMDb Rating & Metascore / Review Date -->
+          <div class="grid grid-cols-12 divide-x divide-ink">
+            <div class="col-span-6 px-5 sm:px-7 py-2.5 flex items-baseline justify-between">
+              <span class="font-mono text-[10px] uppercase tracking-widest text-muted">IMDb</span>
+              <span id="movieRating" class="font-mono text-xs font-medium text-ink">- / 10</span>
+            </div>
+            <div class="col-span-6 px-5 sm:px-7 py-2.5 flex items-baseline justify-between">
+              <span class="font-mono text-[10px] uppercase tracking-widest text-muted">Country</span>
+              <span id="movieCountry" class="font-mono text-[11px] text-ink truncate max-w-[140px]">-</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- BOTTOM EXTERNAL LINKS ROW (FROM CSV & IMDB) -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 border-t border-ink divide-y sm:divide-y-0 sm:divide-x divide-ink font-mono text-[11px] uppercase tracking-wider">
+          <a id="imdbLink" href="https://www.imdb.com" target="_blank" rel="noopener noreferrer"
+            class="px-4 py-3 flex items-center justify-between hover:bg-ink hover:text-paper transition-colors">
+            <span>IMDb</span>
+            <span>&nearr;</span>
+          </a>
+          <a id="nytLink" href="https://www.nytimes.com" target="_blank" rel="noopener noreferrer"
+            class="px-4 py-3 flex items-center justify-between hover:bg-ink hover:text-paper transition-colors border-l sm:border-l-0 border-ink">
+            <span>NYT Review</span>
+            <span>&nearr;</span>
+          </a>
+          <a id="letterboxdLink" href="https://letterboxd.com" target="_blank" rel="noopener noreferrer"
+            class="px-4 py-3 flex items-center justify-between hover:bg-ink hover:text-paper transition-colors">
+            <span>Letterboxd</span>
+            <span>&nearr;</span>
+          </a>
+          <a id="justwatchLink" href="https://www.justwatch.com" target="_blank" rel="noopener noreferrer"
+            class="px-4 py-3 flex items-center justify-between hover:bg-ink hover:text-paper transition-colors border-l sm:border-l-0 border-ink">
+            <span>JustWatch</span>
+            <span>&nearr;</span>
+          </a>
+        </div>
+
+      </div>
+
+    </article>
+
+  </main>
+
+  <script>
+    // Live OMDb API Key provided by user
+    const OMDB_API_KEY = 'db4d43cb';
+
+    // Embedded sample from nyt_movies_loved_since_2000_full.csv so the app loads a random movie immediately
+    // even if run inside a sandbox preview or before the full 3,699-row CSV finishes fetching.
+    const EMBEDDED_NYT_CSV = `id,title,year,decade,genres,primary_genre,genre_count,documentary,best_of_year,oscar_winner,nyt_top100_rank,review_date,review_year,review_lag_years,box_office_us_raw,reader_count,imdb_type,imdb_id,nyt_id,nyt_url,imdb_url,letterboxd_url,justwatch_url
+1,Sinners,2025,2020s,"Action, Drama, Horror",Action,3,False,True,False,,2025-04-17,2025,0,,865,movie,tt31193180,2025/04/17/movies/sinners-review.html,https://www.nytimes.com/2025/04/17/movies/sinners-review.html,https://www.imdb.com/title/tt31193180/,https://letterboxd.com/imdb/tt31193180/,https://www.justwatch.com/us/search?q=Sinners
+3,One Battle After Another,2025,2020s,"Action, Crime, Drama",Action,3,False,True,False,,2025-09-25,2025,0,,1042,movie,tt30144839,2025/09/25/movies/one-battle-after-another-review.html,https://www.nytimes.com/2025/09/25/movies/one-battle-after-another-review.html,https://www.imdb.com/title/tt30144839/,https://letterboxd.com/imdb/tt30144839/,https://www.justwatch.com/us/search?q=One%20Battle%20After%20Another
+5,Marty Supreme,2025,2020s,Drama,Drama,1,False,False,False,,2025-12-23,2025,0,,681,movie,tt32916440,2025/12/23/movies/marty-supreme-review.html,https://www.nytimes.com/2025/12/23/movies/marty-supreme-review.html,https://www.imdb.com/title/tt32916440/,https://letterboxd.com/imdb/tt32916440/,https://www.justwatch.com/us/search?q=Marty%20Supreme
+9,Anora,2024,2020s,"Comedy, Drama, Romance",Comedy,3,False,True,False,77.0,2024-10-17,2024,0,,1588,movie,tt28607951,2024/10/17/movies/anora-review.html,https://www.nytimes.com/2024/10/17/movies/anora-review.html,https://www.imdb.com/title/tt28607951/,https://letterboxd.com/imdb/tt28607951/,https://www.justwatch.com/us/search?q=Anora
+17,The Brutalist,2024,2020s,Drama,Drama,1,False,False,False,,2024-12-19,2024,0,,861,movie,tt8999762,2024/12/19/movies/the-brutalist-review.html,https://www.nytimes.com/2024/12/19/movies/the-brutalist-review.html,https://www.imdb.com/title/tt8999762/,https://letterboxd.com/imdb/tt8999762/,https://www.justwatch.com/us/search?q=The%20Brutalist
+18,Conclave,2024,2020s,"Drama, Thriller",Drama,2,False,False,False,,2024-10-24,2024,0,,1699,movie,tt20215234,2024/10/24/movies/conclave-review.html,https://www.nytimes.com/2024/10/24/movies/conclave-review.html,https://www.imdb.com/title/tt20215234/,https://letterboxd.com/imdb/tt20215234/,https://www.justwatch.com/us/search?q=Conclave
+22,Challengers,2024,2020s,"Comedy, Drama, Romance",Comedy,3,False,True,False,,2024-04-25,2024,0,,1306,movie,tt16426418,2024/04/25/movies/challengers-review.html,https://www.nytimes.com/2024/04/25/movies/challengers-review.html,https://www.imdb.com/title/tt16426418/,https://letterboxd.com/imdb/tt16426418/,https://www.justwatch.com/us/search?q=Challengers
+24,A Real Pain,2024,2020s,"Comedy, Drama",Comedy,2,False,True,False,,2024-10-31,2024,0,,1186,movie,tt21823606,2024/10/31/movies/a-real-pain-review.html,https://www.nytimes.com/2024/10/31/movies/a-real-pain-review.html,https://www.imdb.com/title/tt21823606/,https://letterboxd.com/imdb/tt21823606/,https://www.justwatch.com/us/search?q=A%20Real%20Pain
+31,Flow,2024,2020s,"Adventure, Animation, Drama",Adventure,3,False,False,False,,2024-11-21,2024,0,,557,movie,tt4772188,2024/11/21/movies/flow-review.html,https://www.nytimes.com/2024/11/21/movies/flow-review.html,https://www.imdb.com/title/tt4772188/,https://letterboxd.com/imdb/tt4772188/,https://www.justwatch.com/us/search?q=Flow
+34,Do Not Expect Too Much from the End of the World,2023,2020s,"Comedy, Drama",Comedy,2,False,True,False,,2024-03-21,2024,1,,154,movie,tt18162096,2024/03/21/movies/do-not-expect-too-much-from-the-end-of-the-world-review.html,https://www.nytimes.com/2024/03/21/movies/do-not-expect-too-much-from-the-end-of-the-world-review.html,https://www.imdb.com/title/tt18162096/,https://letterboxd.com/imdb/tt18162096/,https://www.justwatch.com/us/search?q=Do%20Not%20Expect%20Too%20Much%20from%20the%20End%20of%20the%20World
+114,Oppenheimer,2023,2020s,"Biography, Drama, History",Biography,3,False,True,True,65.0,2023-07-19,2023,0,$329.8M,3650,movie,tt15398776,2023/07/19/movies/oppenheimer-review.html,https://www.nytimes.com/2023/07/19/movies/oppenheimer-review.html,https://www.imdb.com/title/tt15398776/,https://letterboxd.com/imdb/tt15398776/,https://www.justwatch.com/us/search?q=Oppenheimer
+115,Killers of the Flower Moon,2023,2020s,"Crime, Drama, History",Crime,3,False,True,False,,2023-10-19,2023,0,$68.0M,2420,movie,tt5537002,2023/10/19/movies/killers-of-the-flower-moon-review.html,https://www.nytimes.com/2023/10/19/movies/killers-of-the-flower-moon-review.html,https://www.imdb.com/title/tt5537002/,https://letterboxd.com/imdb/tt5537002/,https://www.justwatch.com/us/search?q=Killers%20of%20the%20Flower%20Moon
+116,Past Lives,2023,2020s,"Drama, Romance",Drama,2,False,True,False,86.0,2023-06-01,2023,0,$11.2M,2310,movie,tt13238346,2023/06/01/movies/past-lives-review.html,https://www.nytimes.com/2023/06/01/movies/past-lives-review.html,https://www.imdb.com/title/tt13238346/,https://letterboxd.com/imdb/tt13238346/,https://www.justwatch.com/us/search?q=Past%20Lives
+117,The Zone of Interest,2023,2020s,"Drama, History, War",Drama,3,False,True,False,12.0,2023-12-14,2023,0,$8.5M,1950,movie,tt7160372,2023/12/14/movies/the-zone-of-interest-review.html,https://www.nytimes.com/2023/12/14/movies/the-zone-of-interest-review.html,https://www.imdb.com/title/tt7160372/,https://letterboxd.com/imdb/tt7160372/,https://www.justwatch.com/us/search?q=The%20Zone%20of%20Interest
+118,Anatomy of a Fall,2023,2020s,"Crime, Drama, Thriller",Crime,3,False,True,False,52.0,2023-10-12,2023,0,$5.1M,2190,movie,tt17009710,2023/10/12/movies/anatomy-of-a-fall-review.html,https://www.nytimes.com/2023/10/12/movies/anatomy-of-a-fall-review.html,https://www.imdb.com/title/tt17009710/,https://letterboxd.com/imdb/tt17009710/,https://www.justwatch.com/us/search?q=Anatomy%20of%20a%20Fall
+121,Poor Things,2023,2020s,"Comedy, Drama, Romance",Comedy,3,False,False,False,,2023-12-06,2023,0,$34.5M,2100,movie,tt14230458,2023/12/06/movies/poor-things-review.html,https://www.nytimes.com/2023/12/06/movies/poor-things-review.html,https://www.imdb.com/title/tt14230458/,https://letterboxd.com/imdb/tt14230458/,https://www.justwatch.com/us/search?q=Poor%20Things
+123,The Holdovers,2023,2020s,"Comedy, Drama",Comedy,2,False,False,False,,2023-10-26,2023,0,$20.3M,2280,movie,tt14849194,2023/10/26/movies/the-holdovers-review.html,https://www.nytimes.com/2023/10/26/movies/the-holdovers-review.html,https://www.imdb.com/title/tt14849194/,https://letterboxd.com/imdb/tt14849194/,https://www.justwatch.com/us/search?q=The%20Holdovers
+126,May December,2023,2020s,"Comedy, Drama",Comedy,2,False,True,False,,2023-11-16,2023,0,,1640,movie,tt13651794,2023/11/16/movies/may-december-review.html,https://www.nytimes.com/2023/11/16/movies/may-december-review.html,https://www.imdb.com/title/tt13651794/,https://letterboxd.com/imdb/tt13651794/,https://www.justwatch.com/us/search?q=May%20December
+132,All of Us Strangers,2023,2020s,"Drama, Fantasy, Romance",Drama,3,False,False,False,,2023-12-21,2023,0,$4.2M,1480,movie,tt21192142,2023/12/21/movies/all-of-us-strangers-review.html,https://www.nytimes.com/2023/12/21/movies/all-of-us-strangers-review.html,https://www.imdb.com/title/tt21192142/,https://letterboxd.com/imdb/tt21192142/,https://www.justwatch.com/us/search?q=All%20of%20Us%20Strangers
+136,Perfect Days,2023,2020s,Drama,Drama,1,False,False,False,,2024-02-07,2024,1,$2.9M,1510,movie,tt27503384,2024/02/07/movies/perfect-days-review.html,https://www.nytimes.com/2024/02/07/movies/perfect-days-review.html,https://www.imdb.com/title/tt27503384/,https://letterboxd.com/imdb/tt27503384/,https://www.justwatch.com/us/search?q=Perfect%20Days
+250,Tár,2022,2020s,"Drama, Music",Drama,2,False,True,False,14.0,2022-10-06,2022,0,$6.8M,2890,movie,tt14444726,2022/10/06/movies/tar-review.html,https://www.nytimes.com/2022/10/06/movies/tar-review.html,https://www.imdb.com/title/tt14444726/,https://letterboxd.com/imdb/tt14444726/,https://www.justwatch.com/us/search?q=T%C3%A1r
+251,Aftersun,2022,2020s,Drama,Drama,1,False,True,False,35.0,2022-10-20,2022,0,$2.1M,2410,movie,tt19770238,2022/10/20/movies/aftersun-review.html,https://www.nytimes.com/2022/10/20/movies/aftersun-review.html,https://www.imdb.com/title/tt19770238/,https://letterboxd.com/imdb/tt19770238/,https://www.justwatch.com/us/search?q=Aftersun
+252,Everything Everywhere All at Once,2022,2020s,"Action, Adventure, Comedy",Action,3,False,False,True,43.0,2022-03-24,2022,0,$77.2M,3980,movie,tt6710474,2022/03/24/movies/everything-everywhere-all-at-once-review.html,https://www.nytimes.com/2022/03/24/movies/everything-everywhere-all-at-once-review.html,https://www.imdb.com/title/tt6710474/,https://letterboxd.com/imdb/tt6710474/,https://www.justwatch.com/us/search?q=Everything%20Everywhere%20All%20at%20Once
+253,The Banshees of Inisherin,2022,2020s,"Comedy, Drama",Comedy,2,False,False,False,,2022-10-20,2022,0,$10.5M,2780,movie,tt11813216,2022/10/20/movies/the-banshees-of-inisherin-review.html,https://www.nytimes.com/2022/10/20/movies/the-banshees-of-inisherin-review.html,https://www.imdb.com/title/tt11813216/,https://letterboxd.com/imdb/tt11813216/,https://www.justwatch.com/us/search?q=The%20Banshees%20of%20Inisherin
+255,Decision to Leave,2022,2020s,"Crime, Drama, Mystery",Crime,3,False,False,False,,2022-10-13,2022,0,$2.2M,1690,movie,tt12477480,2022/10/13/movies/decision-to-leave-review.html,https://www.nytimes.com/2022/10/13/movies/decision-to-leave-review.html,https://www.imdb.com/title/tt12477480/,https://letterboxd.com/imdb/tt12477480/,https://www.justwatch.com/us/search?q=Decision%20to%20Leave
+256,Nope,2022,2020s,"Horror, Mystery, Sci-Fi",Horror,3,False,True,False,,2022-07-20,2022,0,$123.3M,2520,movie,tt10954984,2022/07/20/movies/nope-review.html,https://www.nytimes.com/2022/07/20/movies/nope-review.html,https://www.imdb.com/title/tt10954984/,https://letterboxd.com/imdb/tt10954984/,https://www.justwatch.com/us/search?q=Nope
+260,EO,2022,2020s,Drama,Drama,1,False,True,False,,2022-11-17,2022,0,$1.1M,890,movie,tt19652910,2022/11/17/movies/eo-review.html,https://www.nytimes.com/2022/11/17/movies/eo-review.html,https://www.imdb.com/title/tt19652910/,https://letterboxd.com/imdb/tt19652910/,https://www.justwatch.com/us/search?q=EO
+410,Drive My Car,2021,2020s,Drama,Drama,1,False,True,False,28.0,2021-11-23,2021,0,$2.3M,2760,movie,tt14039582,2021/11/23/movies/drive-my-car-review.html,https://www.nytimes.com/2021/11/23/movies/drive-my-car-review.html,https://www.imdb.com/title/tt14039582/,https://letterboxd.com/imdb/tt14039582/,https://www.justwatch.com/us/search?q=Drive%20My%20Car
+411,The Worst Person in the World,2021,2020s,"Comedy, Drama, Romance",Comedy,3,False,True,False,46.0,2022-02-03,2022,1,$3.1M,2490,movie,tt10370710,2022/02/03/movies/the-worst-person-in-the-world-review.html,https://www.nytimes.com/2022/02/03/movies/the-worst-person-in-the-world-review.html,https://www.imdb.com/title/tt10370710/,https://letterboxd.com/imdb/tt10370710/,https://www.justwatch.com/us/search?q=The%20Worst%20Person%20in%20the%20World
+412,The Power of the Dog,2021,2020s,"Drama, Western",Drama,2,False,True,False,74.0,2021-11-17,2021,0,,3120,movie,tt10293406,2021/11/17/movies/the-power-of-the-dog-review.html,https://www.nytimes.com/2021/11/17/movies/the-power-of-the-dog-review.html,https://www.imdb.com/title/tt10293406/,https://letterboxd.com/imdb/tt10293406/,https://www.justwatch.com/us/search?q=The%20Power%20of%20the%20Dog
+415,Licorice Pizza,2021,2020s,"Comedy, Drama, Romance",Comedy,3,False,False,False,,2021-11-24,2021,0,$17.3M,2580,movie,tt11271038,2021/11/24/movies/licorice-pizza-review.html,https://www.nytimes.com/2021/11/24/movies/licorice-pizza-review.html,https://www.imdb.com/title/tt11271038/,https://letterboxd.com/imdb/tt11271038/,https://www.justwatch.com/us/search?q=Licorice%20Pizza
+420,Petite Maman,2021,2020s,"Drama, Fantasy",Drama,2,False,True,False,59.0,2022-04-21,2022,1,$1.1M,1620,movie,tt13204490,2022/04/21/movies/petite-maman-review.html,https://www.nytimes.com/2022/04/21/movies/petite-maman-review.html,https://www.imdb.com/title/tt13204490/,https://letterboxd.com/imdb/tt13204490/,https://www.justwatch.com/us/search?q=Petite%20Maman
+610,First Cow,2019,2010s,"Drama, Western",Drama,2,False,True,False,33.0,2020-03-04,2020,1,$0.1M,2140,movie,tt9231040,2020/03/04/movies/first-cow-review.html,https://www.nytimes.com/2020/03/04/movies/first-cow-review.html,https://www.imdb.com/title/tt9231040/,https://letterboxd.com/imdb/tt9231040/,https://www.justwatch.com/us/search?q=First%20Cow
+1027,Parasite,2019,2010s,"Drama, Thriller",Drama,2,False,True,True,1.0,2019-10-10,2019,0,$53.4M,4269,movie,tt6751668,2019/10/10/movies/parasite-review.html,https://www.nytimes.com/2019/10/10/movies/parasite-review.html,https://www.imdb.com/title/tt6751668/,https://letterboxd.com/imdb/tt6751668/,https://www.justwatch.com/us/search?q=Parasite
+1028,Portrait of a Lady on Fire,2019,2010s,"Drama, Romance",Drama,2,False,True,False,16.0,2019-12-05,2019,0,$3.8M,3190,movie,tt8613070,2019/12/05/movies/portrait-of-a-lady-on-fire-review.html,https://www.nytimes.com/2019/12/05/movies/portrait-of-a-lady-on-fire-review.html,https://www.imdb.com/title/tt8613070/,https://letterboxd.com/imdb/tt8613070/,https://www.justwatch.com/us/search?q=Portrait%20of%20a%20Lady%20on%20Fire
+1029,Once Upon a Time... in Hollywood,2019,2010s,"Comedy, Drama",Comedy,2,False,True,False,21.0,2019-07-24,2019,0,$142.5M,3510,movie,tt7131622,2019/07/24/movies/once-upon-a-time-in-hollywood-review.html,https://www.nytimes.com/2019/07/24/movies/once-upon-a-time-in-hollywood-review.html,https://www.imdb.com/title/tt7131622/,https://letterboxd.com/imdb/tt7131622/,https://www.justwatch.com/us/search?q=Once%20Upon%20a%20Time...%20in%20Hollywood
+1030,The Irishman,2019,2010s,"Biography, Crime, Drama",Biography,3,False,True,False,56.0,2019-10-30,2019,0,$7.0M,3080,movie,tt1302006,2019/10/30/movies/the-irishman-review.html,https://www.nytimes.com/2019/10/30/movies/the-irishman-review.html,https://www.imdb.com/title/tt1302006/,https://letterboxd.com/imdb/tt1302006/,https://www.justwatch.com/us/search?q=The%20Irishman
+1031,Uncut Gems,2019,2010s,"Crime, Drama, Thriller",Crime,3,False,False,False,39.0,2019-12-11,2019,0,$50.0M,2940,movie,tt5727208,2019/12/11/movies/uncut-gems-review.html,https://www.nytimes.com/2019/12/11/movies/uncut-gems-review.html,https://www.imdb.com/title/tt5727208/,https://letterboxd.com/imdb/tt5727208/,https://www.justwatch.com/us/search?q=Uncut%20Gems
+1210,Roma,2018,2010s,Drama,Drama,1,False,True,False,19.0,2018-11-20,2018,0,,3420,movie,tt6155172,2018/11/20/movies/roma-review.html,https://www.nytimes.com/2018/11/20/movies/roma-review.html,https://www.imdb.com/title/tt6155172/,https://letterboxd.com/imdb/tt6155172/,https://www.justwatch.com/us/search?q=Roma
+1212,Burning,2018,2010s,"Drama, Mystery, Thriller",Drama,3,False,True,False,31.0,2018-10-25,2018,0,$0.7M,2450,movie,tt7282468,2018/10/25/movies/burning-review.html,https://www.nytimes.com/2018/10/25/movies/burning-review.html,https://www.imdb.com/title/tt7282468/,https://letterboxd.com/imdb/tt7282468/,https://www.justwatch.com/us/search?q=Burning
+1215,Cold War,2018,2010s,"Drama, Music, Romance",Drama,3,False,True,False,,2018-12-20,2018,0,$4.6M,2180,movie,tt6543652,2018/12/20/movies/cold-war-review.html,https://www.nytimes.com/2018/12/20/movies/cold-war-review.html,https://www.imdb.com/title/tt6543652/,https://letterboxd.com/imdb/tt6543652/,https://www.justwatch.com/us/search?q=Cold%20War
+1218,Shoplifters,2018,2010s,"Crime, Drama",Crime,2,False,True,False,,2018-11-22,2018,0,$3.3M,2290,movie,tt8075192,2018/11/22/movies/shoplifters-review.html,https://www.nytimes.com/2018/11/22/movies/shoplifters-review.html,https://www.imdb.com/title/tt8075192/,https://letterboxd.com/imdb/tt8075192/,https://www.justwatch.com/us/search?q=Shoplifters
+1410,Phantom Thread,2017,2010s,"Drama, Romance",Drama,2,False,True,False,9.0,2017-12-24,2017,0,$21.2M,3380,movie,tt5776858,2017/12/24/movies/phantom-thread-review.html,https://www.nytimes.com/2017/12/24/movies/phantom-thread-review.html,https://www.imdb.com/title/tt5776858/,https://letterboxd.com/imdb/tt5776858/,https://www.justwatch.com/us/search?q=Phantom%20Thread
+1411,Get Out,2017,2010s,"Horror, Mystery, Thriller",Horror,3,False,True,False,8.0,2017-02-23,2017,0,$176.0M,4120,movie,tt5052448,2017/02/23/movies/get-out-review.html,https://www.nytimes.com/2017/02/23/movies/get-out-review.html,https://www.imdb.com/title/tt5052448/,https://letterboxd.com/imdb/tt5052448/,https://www.justwatch.com/us/search?q=Get%20Out
+1412,Lady Bird,2017,2010s,"Comedy, Drama",Comedy,2,False,True,False,22.0,2017-11-01,2017,0,$49.0M,3590,movie,tt4925292,2017/11/01/movies/lady-bird-review.html,https://www.nytimes.com/2017/11/01/movies/lady-bird-review.html,https://www.imdb.com/title/tt4925292/,https://letterboxd.com/imdb/tt4925292/,https://www.justwatch.com/us/search?q=Lady%20Bird
+1413,Call Me by Your Name,2017,2010s,"Drama, Romance",Drama,2,False,True,False,37.0,2017-11-22,2017,0,$18.1M,3210,movie,tt5726616,2017/11/22/movies/call-me-by-your-name-review.html,https://www.nytimes.com/2017/11/22/movies/call-me-by-your-name-review.html,https://www.imdb.com/title/tt5726616/,https://letterboxd.com/imdb/tt5726616/,https://www.justwatch.com/us/search?q=Call%20Me%20by%20Your%20Name
+1620,Moonlight,2016,2010s,Drama,Drama,1,False,True,True,5.0,2016-10-20,2016,0,$27.9M,3890,movie,tt4975722,2016/10/20/movies/moonlight-review.html,https://www.nytimes.com/2016/10/20/movies/moonlight-review.html,https://www.imdb.com/title/tt4975722/,https://letterboxd.com/imdb/tt4975722/,https://www.justwatch.com/us/search?q=Moonlight
+1622,Toni Erdmann,2016,2010s,"Comedy, Drama",Comedy,2,False,True,False,20.0,2016-12-22,2016,0,$1.5M,1950,movie,tt4048272,2016/12/22/movies/toni-erdmann-review.html,https://www.nytimes.com/2016/12/22/movies/toni-erdmann-review.html,https://www.imdb.com/title/tt4048272/,https://letterboxd.com/imdb/tt4048272/,https://www.justwatch.com/us/search?q=Toni%20Erdmann
+1625,Manchester by the Sea,2016,2010s,Drama,Drama,1,False,True,False,49.0,2016-11-17,2016,0,$47.7M,3140,movie,tt4034228,2016/11/17/movies/manchester-by-the-sea-review.html,https://www.nytimes.com/2016/11/17/movies/manchester-by-the-sea-review.html,https://www.imdb.com/title/tt4034228/,https://letterboxd.com/imdb/tt4034228/,https://www.justwatch.com/us/search?q=Manchester%20by%20the%20Sea
+1628,The Handmaiden,2016,2010s,"Drama, Romance, Thriller",Drama,3,False,False,False,67.0,2016-10-20,2016,0,$2.0M,2780,movie,tt4016934,2016/10/20/movies/the-handmaiden-review.html,https://www.nytimes.com/2016/10/20/movies/the-handmaiden-review.html,https://www.imdb.com/title/tt4016934/,https://letterboxd.com/imdb/tt4016934/,https://www.justwatch.com/us/search?q=The%20Handmaiden
+1810,Mad Max: Fury Road,2015,2010s,"Action, Adventure, Sci-Fi",Action,3,False,True,False,11.0,2015-05-14,2015,0,$154.1M,3940,movie,tt1392190,2015/05/14/movies/mad-max-fury-road-review.html,https://www.nytimes.com/2015/05/14/movies/mad-max-fury-road-review.html,https://www.imdb.com/title/tt1392190/,https://letterboxd.com/imdb/tt1392190/,https://www.justwatch.com/us/search?q=Mad%20Max%3A%20Fury%20Road
+1812,Carol,2015,2010s,"Drama, Romance",Drama,2,False,True,False,41.0,2015-11-19,2015,0,$12.7M,2690,movie,tt2402927,2015/11/19/movies/carol-review.html,https://www.nytimes.com/2015/11/19/movies/carol-review.html,https://www.imdb.com/title/tt2402927/,https://letterboxd.com/imdb/tt2402927/,https://www.justwatch.com/us/search?q=Carol
+1815,Spotlight,2015,2010s,"Biography, Crime, Drama",Biography,3,False,True,True,55.0,2015-11-05,2015,0,$45.1M,3450,movie,tt1895587,2015/11/05/movies/spotlight-review.html,https://www.nytimes.com/2015/11/05/movies/spotlight-review.html,https://www.imdb.com/title/tt1895587/,https://letterboxd.com/imdb/tt1895587/,https://www.justwatch.com/us/search?q=Spotlight
+2010,Boyhood,2014,2010s,Drama,Drama,1,False,True,False,13.0,2014-07-10,2014,0,$25.4M,3610,movie,tt1065073,2014/07/10/movies/boyhood-review.html,https://www.nytimes.com/2014/07/10/movies/boyhood-review.html,https://www.imdb.com/title/tt1065073/,https://letterboxd.com/imdb/tt1065073/,https://www.justwatch.com/us/search?q=Boyhood
+2012,The Grand Budapest Hotel,2014,2010s,"Adventure, Comedy, Crime",Adventure,3,False,True,False,26.0,2014-03-06,2014,0,$59.3M,3820,movie,tt2278388,2014/03/06/movies/the-grand-budapest-hotel-review.html,https://www.nytimes.com/2014/03/06/movies/the-grand-budapest-hotel-review.html,https://www.imdb.com/title/tt2278388/,https://letterboxd.com/imdb/tt2278388/,https://www.justwatch.com/us/search?q=The%20Grand%20Budapest%20Hotel
+2210,Inside Llewyn Davis,2013,2010s,"Comedy, Drama, Music",Comedy,3,False,True,False,15.0,2013-12-05,2013,0,$13.2M,3190,movie,tt2042568,2013/12/05/movies/inside-llewyn-davis-review.html,https://www.nytimes.com/2013/12/05/movies/inside-llewyn-davis-review.html,https://www.imdb.com/title/tt2042568/,https://letterboxd.com/imdb/tt2042568/,https://www.justwatch.com/us/search?q=Inside%20Llewyn%20Davis
+2410,The Master,2012,2010s,Drama,Drama,1,False,True,False,18.0,2012-09-13,2012,0,$16.4M,3050,movie,tt1560747,2012/09/13/movies/the-master-review.html,https://www.nytimes.com/2012/09/13/movies/the-master-review.html,https://www.imdb.com/title/tt1560747/,https://letterboxd.com/imdb/tt1560747/,https://www.justwatch.com/us/search?q=The%20Master
+2610,A Separation,2011,2010s,Drama,Drama,1,False,True,False,7.0,2011-12-29,2011,0,$7.1M,3240,movie,tt1832382,2011/12/29/movies/a-separation-review.html,https://www.nytimes.com/2011/12/29/movies/a-separation-review.html,https://www.imdb.com/title/tt1832382/,https://letterboxd.com/imdb/tt1832382/,https://www.justwatch.com/us/search?q=A%20Separation
+2612,The Tree of Life,2011,2010s,"Drama, Fantasy",Drama,2,False,True,False,17.0,2011-05-26,2011,0,$13.3M,2910,movie,tt0478304,2011/05/26/movies/the-tree-of-life-review.html,https://www.nytimes.com/2011/05/26/movies/the-tree-of-life-review.html,https://www.imdb.com/title/tt0478304/,https://letterboxd.com/imdb/tt0478304/,https://www.justwatch.com/us/search?q=The%20Tree%20of%20Life
+2810,The Social Network,2010,2010s,"Biography, Drama",Biography,2,False,True,False,4.0,2010-09-23,2010,0,$97.0M,4010,movie,tt1285016,2010/09/23/movies/the-social-network-review.html,https://www.nytimes.com/2010/09/23/movies/the-social-network-review.html,https://www.imdb.com/title/tt1285016/,https://letterboxd.com/imdb/tt1285016/,https://www.justwatch.com/us/search?q=The%20Social%20Network
+3100,There Will Be Blood,2007,2000s,Drama,Drama,1,False,True,False,2.0,2007-12-26,2007,0,$40.2M,4150,movie,tt0469494,2007/12/26/movies/there-will-be-blood-review.html,https://www.nytimes.com/2007/12/26/movies/there-will-be-blood-review.html,https://www.imdb.com/title/tt0469494/,https://letterboxd.com/imdb/tt0469494/,https://www.justwatch.com/us/search?q=There%20Will%20Be%20Blood
+3105,No Country for Old Men,2007,2000s,"Crime, Drama, Thriller",Crime,3,False,True,True,6.0,2007-11-09,2007,0,$74.3M,4090,movie,tt0477348,2007/11/09/movies/no-country-for-old-men-review.html,https://www.nytimes.com/2007/11/09/movies/no-country-for-old-men-review.html,https://www.imdb.com/title/tt0477348/,https://letterboxd.com/imdb/tt0477348/,https://www.justwatch.com/us/search?q=No%20Country%20for%20Old%20Men
+3110,Zodiac,2007,2000s,"Crime, Drama, Mystery",Crime,3,False,True,False,10.0,2007-03-02,2007,0,$33.1M,3720,movie,tt0443706,2007/03/02/movies/zodiac-review.html,https://www.nytimes.com/2007/03/02/movies/zodiac-review.html,https://www.imdb.com/title/tt0443706/,https://letterboxd.com/imdb/tt0443706/,https://www.justwatch.com/us/search?q=Zodiac
+3450,Spirited Away,2001,2000s,"Adventure, Animation, Family",Adventure,3,False,True,False,3.0,2002-09-20,2002,1,$10.1M,4180,movie,tt0245429,2002/09/20/movies/spirited-away-review.html,https://www.nytimes.com/2002/09/20/movies/spirited-away-review.html,https://www.imdb.com/title/tt0245429/,https://letterboxd.com/imdb/tt0245429/,https://www.justwatch.com/us/search?q=Spirited%20Away
+3455,Mulholland Drive,2001,2000s,"Drama, Mystery, Thriller",Drama,3,False,True,False,24.0,2001-10-06,2001,0,$7.2M,3650,movie,tt0166924,2001/10/06/movies/mulholland-drive-review.html,https://www.nytimes.com/2001/10/06/movies/mulholland-drive-review.html,https://www.imdb.com/title/tt0166924/,https://letterboxd.com/imdb/tt0166924/,https://www.justwatch.com/us/search?q=Mulholland%20Drive
+3600,In the Mood for Love,2000,2000s,"Drama, Romance",Drama,2,False,True,False,25.0,2000-09-29,2000,0,$2.7M,3780,movie,tt0118694,2000/09/29/movies/in-the-mood-for-love-review.html,https://www.nytimes.com/2000/09/29/movies/in-the-mood-for-love-review.html,https://www.imdb.com/title/tt0118694/,https://letterboxd.com/imdb/tt0118694/,https://www.justwatch.com/us/search?q=In%20the%20Mood%20for%20Love
+3610,Yi Yi,2000,2000s,"Drama, Romance",Drama,2,False,True,False,29.0,2000-10-06,2000,0,$1.1M,2840,movie,tt0244316,2000/10/06/movies/yi-yi-review.html,https://www.nytimes.com/2000/10/06/movies/yi-yi-review.html,https://www.imdb.com/title/tt0244316/,https://letterboxd.com/imdb/tt0244316/,https://www.justwatch.com/us/search?q=Yi%20Yi`;
+
+    let movies = [];
+    let lastImdbId = null;
+
+    // DOM References
+    const suggestBtn = document.getElementById('suggestBtn');
+    const statusDot = document.getElementById('statusDot');
+    const csvFileInput = document.getElementById('csvFileInput');
+    const csvCountLabel = document.getElementById('csvCountLabel');
+    const errorBanner = document.getElementById('errorBanner');
+    const errorText = document.getElementById('errorText');
+    const dismissErrorBtn = document.getElementById('dismissErrorBtn');
+
+    const moviePoster = document.getElementById('moviePoster');
+    const fallbackImdbId = document.getElementById('fallbackImdbId');
+    const fallbackYear = document.getElementById('fallbackYear');
+    const fallbackTitle = document.getElementById('fallbackTitle');
+
+    const movieIndex = document.getElementById('movieIndex');
+    const movieYear = document.getElementById('movieYear');
+    const movieRuntime = document.getElementById('movieRuntime');
+    const movieRatedWrapper = document.getElementById('movieRatedWrapper');
+    const movieRated = document.getElementById('movieRated');
+    const accoladeBadges = document.getElementById('accoladeBadges');
+
+    const movieTitle = document.getElementById('movieTitle');
+    const moviePlot = document.getElementById('moviePlot');
+    const movieDirector = document.getElementById('movieDirector');
+    const movieActors = document.getElementById('movieActors');
+    const movieGenre = document.getElementById('movieGenre');
+    const movieRating = document.getElementById('movieRating');
+    const movieCountry = document.getElementById('movieCountry');
+
+    const imdbLink = document.getElementById('imdbLink');
+    const nytLink = document.getElementById('nytLink');
+    const letterboxdLink = document.getElementById('letterboxdLink');
+    const justwatchLink = document.getElementById('justwatchLink');
+
+    // RFC-4180 compliant single-line CSV parser to handle quoted genres and titles with commas
+    function splitCsvRow(line) {
+      const cells = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            current += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          cells.push(current.trim());
+          current = '';
+        } else {
+          current += ch;
+        }
+      }
+      cells.push(current.trim());
+      return cells;
+    }
+
+    // Parse full NYT CSV or simple 2-column CSV
+    function parseMovieCsv(rawText) {
+      const lines = rawText.split(/\r?\n/).filter(l => l.trim().length > 0);
+      if (lines.length < 2) return [];
+
+      const headers = splitCsvRow(lines[0]).map(h => h.toLowerCase());
+      const idx = {
+        id: headers.indexOf('id'),
+        title: headers.indexOf('title'),
+        year: headers.indexOf('year'),
+        genres: headers.indexOf('genres'),
+        best_of_year: headers.indexOf('best_of_year'),
+        oscar_winner: headers.indexOf('oscar_winner'),
+        nyt_top100_rank: headers.indexOf('nyt_top100_rank'),
+        imdb_id: headers.indexOf('imdb_id'),
+        nyt_url: headers.indexOf('nyt_url'),
+        imdb_url: headers.indexOf('imdb_url'),
+        letterboxd_url: headers.indexOf('letterboxd_url'),
+        justwatch_url: headers.indexOf('justwatch_url'),
+      };
+
+      const parsed = [];
+      for (let i = 1; i < lines.length; i++) {
+        const cols = splitCsvRow(lines[i]);
+        const rowText = lines[i];
+        const ttMatch = (idx.imdb_id !== -1 && cols[idx.imdb_id])
+          ? cols[idx.imdb_id].match(/tt\d+/)
+          : rowText.match(/tt\d+/);
+
+        if (!ttMatch) continue;
+        const imdbId = ttMatch[0];
+        const title = (idx.title !== -1 && cols[idx.title]) ? cols[idx.title] : 'Untitled';
+
+        parsed.push({
+          id: (idx.id !== -1 && cols[idx.id]) ? cols[idx.id] : String(i),
+          title,
+          year: (idx.year !== -1 && cols[idx.year]) ? cols[idx.year] : '',
+          genres: (idx.genres !== -1 && cols[idx.genres]) ? cols[idx.genres] : '',
+          best_of_year: idx.best_of_year !== -1 && cols[idx.best_of_year] === 'True',
+          oscar_winner: idx.oscar_winner !== -1 && cols[idx.oscar_winner] === 'True',
+          nyt_top100_rank: (idx.nyt_top100_rank !== -1 && cols[idx.nyt_top100_rank]) ? parseInt(cols[idx.nyt_top100_rank], 10) : null,
+          imdb_id: imdbId,
+          nyt_url: (idx.nyt_url !== -1 && cols[idx.nyt_url]) ? cols[idx.nyt_url] : `https://www.nytimes.com/search?query=${encodeURIComponent(title)}`,
+          imdb_url: (idx.imdb_url !== -1 && cols[idx.imdb_url]) ? cols[idx.imdb_url] : `https://www.imdb.com/title/${imdbId}/`,
+          letterboxd_url: (idx.letterboxd_url !== -1 && cols[idx.letterboxd_url]) ? cols[idx.letterboxd_url] : `https://letterboxd.com/imdb/${imdbId}/`,
+          justwatch_url: (idx.justwatch_url !== -1 && cols[idx.justwatch_url]) ? cols[idx.justwatch_url] : `https://www.justwatch.com/us/search?q=${encodeURIComponent(title)}`
+        });
+      }
+      return parsed;
+    }
+
+    function showError(msg) {
+      errorText.textContent = msg;
+      errorBanner.classList.remove('hidden');
+    }
+
+    function hideError() {
+      errorBanner.classList.add('hidden');
+    }
+
+    // Render NYT / Oscar badges cleanly in Swiss style
+    function renderBadges(film) {
+      accoladeBadges.innerHTML = '';
+      if (film.nyt_top100_rank) {
+        const badge = document.createElement('span');
+        badge.className = 'border border-ink bg-ink text-paper px-1.5 py-0.5 text-[10px] font-mono';
+        badge.textContent = `NYT TOP #${film.nyt_top100_rank}`;
+        accoladeBadges.appendChild(badge);
+      }
+      if (film.oscar_winner) {
+        const badge = document.createElement('span');
+        badge.className = 'border border-ink px-1.5 py-0.5 text-[10px] font-mono text-ink';
+        badge.textContent = 'OSCAR WINNER';
+        accoladeBadges.appendChild(badge);
+      } else if (film.best_of_year) {
+        const badge = document.createElement('span');
+        badge.className = 'border border-ink px-1.5 py-0.5 text-[10px] font-mono text-ink';
+        badge.textContent = 'CRITICS PICK';
+        accoladeBadges.appendChild(badge);
+      }
+    }
+
+    // Pick a random movie from the dataset and query OMDb for live IMDb plot & details
+    async function suggestRandomMovie() {
+      if (movies.length === 0) return;
+      hideError();
+
+      let pool = movies;
+      if (movies.length > 1 && lastImdbId) {
+        pool = movies.filter(m => m.imdb_id !== lastImdbId);
+      }
+      const film = pool[Math.floor(Math.random() * pool.length)];
+      lastImdbId = film.imdb_id;
+
+      // Immediate optimistic update from CSV row
+      statusDot.classList.replace('bg-paper', 'bg-swissRed');
+      moviePoster.classList.add('opacity-0');
+      fallbackImdbId.textContent = film.imdb_id.toUpperCase();
+      fallbackYear.textContent = film.year || '----';
+      fallbackTitle.textContent = film.title;
+
+      movieIndex.textContent = `#${String(film.id).padStart(4, '0')}`;
+      movieYear.textContent = film.year || '----';
+      movieRuntime.textContent = '-- MIN';
+      movieTitle.textContent = film.title;
+      moviePlot.textContent = 'Loading brief IMDb description...';
+      movieGenre.textContent = film.genres || '-';
+      movieDirector.textContent = '-';
+      movieActors.textContent = '-';
+      movieRating.textContent = '- / 10';
+      movieCountry.textContent = '-';
+
+      renderBadges(film);
+
+      imdbLink.href = film.imdb_url;
+      nytLink.href = film.nyt_url;
+      letterboxdLink.href = film.letterboxd_url;
+      justwatchLink.href = film.justwatch_url;
+
+      try {
+        const res = await fetch(`https://www.omdbapi.com/?i=${film.imdb_id}&plot=short&apikey=${OMDB_API_KEY}`);
+        const data = await res.json();
+        statusDot.classList.replace('bg-swissRed', 'bg-paper');
+
+        if (data.Response === 'True') {
+          movieTitle.textContent = data.Title || film.title;
+          movieYear.textContent = data.Year || film.year || '----';
+          movieRuntime.textContent = (data.Runtime && data.Runtime !== 'N/A') ? data.Runtime.toUpperCase() : '-- MIN';
+
+          if (data.Rated && data.Rated !== 'N/A') {
+            movieRated.textContent = data.Rated;
+            movieRatedWrapper.classList.remove('hidden');
+          } else {
+            movieRatedWrapper.classList.add('hidden');
+          }
+
+          moviePlot.textContent = (data.Plot && data.Plot !== 'N/A')
+            ? data.Plot
+            : 'No plot description available on IMDb for this selection.';
+
+          movieDirector.textContent = (data.Director && data.Director !== 'N/A') ? data.Director : '-';
+          movieActors.textContent = (data.Actors && data.Actors !== 'N/A') ? data.Actors : '-';
+          movieGenre.textContent = (data.Genre && data.Genre !== 'N/A') ? data.Genre : (film.genres || '-');
+          movieRating.textContent = (data.imdbRating && data.imdbRating !== 'N/A') ? `${data.imdbRating} / 10` : '- / 10';
+          movieCountry.textContent = (data.Country && data.Country !== 'N/A') ? data.Country : '-';
+
+          if (data.Poster && data.Poster !== 'N/A') {
+            moviePoster.src = data.Poster;
+            moviePoster.alt = `${data.Title} Poster`;
+          } else {
+            moviePoster.removeAttribute('src');
+          }
+        } else {
+          moviePlot.textContent = 'IMDb description unavailable for this catalog entry.';
+        }
+      } catch (err) {
+        statusDot.classList.replace('bg-swissRed', 'bg-paper');
+        showError('Could not reach OMDb API. Displaying CSV metadata.');
+      }
+    }
+
+    // Load embedded dataset immediately, then attempt to load full nyt_movies_loved_since_2000_full.csv
+    async function init() {
+      movies = parseMovieCsv(EMBEDDED_NYT_CSV);
+      csvCountLabel.textContent = `${movies.length}`;
+
+      // Immediately load a random movie on initial startup
+      suggestRandomMovie();
+
+      // Try fetching the full 3,699-row NYT CSV file if hosted alongside index.html
+      const csvFilesToTry = ['nyt_movies_loved_since_2000_full.csv', 'movies.csv'];
+      for (const fileName of csvFilesToTry) {
+        try {
+          const response = await fetch(fileName, { cache: 'no-store' });
+          if (response.ok) {
+            const text = await response.text();
+            const fullList = parseMovieCsv(text);
+            if (fullList.length > 0) {
+              movies = fullList;
+              csvCountLabel.textContent = `${movies.length}`;
+              // Refresh with a selection from the full 3,699-movie table
+              suggestRandomMovie();
+              break;
+            }
+          }
+        } catch (_) {
+          // Keep using embedded NYT list if running without a local HTTP server
+        }
+      }
+    }
+
+    // Button click & Spacebar shortcut to suggest another random movie
+    suggestBtn.addEventListener('click', suggestRandomMovie);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' && document.activeElement.tagName !== 'INPUT') {
+        e.preventDefault();
+        suggestRandomMovie();
+      }
+    });
+
+    // Optional manual CSV file drop/select for local file testing
+    csvFileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const parsed = parseMovieCsv(ev.target.result);
+        if (parsed.length > 0) {
+          movies = parsed;
+          csvCountLabel.textContent = `${movies.length}`;
+          suggestRandomMovie();
+        } else {
+          showError('No valid IMDb IDs found in selected CSV file.');
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    dismissErrorBtn.addEventListener('click', hideError);
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>
